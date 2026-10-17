@@ -60,8 +60,8 @@ class SystemResetCommand(BaseCommand):
                         else "  • [bold]Progress tracking[/bold] - Completion history\n"
                     )
                     + "\n"
-                    "[dim]The src/ files remain untouched - you can rebuild everything with:[/dim]\n"
-                    "  [cyan]tren module complete --all[/cyan]",
+                    "[dim]The src/ files remain untouched - start over with:[/dim]\n"
+                    "  [cyan]tren module start 01[/cyan]",
                     title="🔄 System Reset",
                     border_style="red",
                 )
@@ -152,8 +152,8 @@ class SystemResetCommand(BaseCommand):
                     Panel(
                         f"[green]✅ Reset complete![/green]\n\n"
                         f"Cleared: {', '.join(summary) if summary else 'nothing to clear'}\n\n"
-                        "[dim]To rebuild the package:[/dim]\n"
-                        "  [cyan]tren module complete --all[/cyan]",
+                        "[dim]To start over:[/dim]\n"
+                        "  [cyan]tren module start 01[/cyan]",
                         title="🔄 System Reset Complete",
                         border_style="green",
                     )

@@ -804,13 +804,14 @@ class ModuleWorkflowCommand(BaseCommand):
 
         module_mapping = get_module_mapping()
         module_nums = sorted(module_mapping.keys(), key=int)
+        total = len(module_nums)
 
         console = self.console
         console.print(
             Panel(
-                f"[bold cyan]Completing All Modules ({len(module_nums)} total)[/bold cyan]\n\n"
+                f"[bold cyan]Completing All Modules ({total} total)[/bold cyan]\n\n"
                 "This will test and export each module in sequence.\n"
-                "[dim]Modules without notebooks will be skipped.[/dim]",
+                "[dim]Stops at the first module that has not been started.[/dim]",
                 title="🔄 Complete All Modules",
                 border_style="cyan",
                 box=box.ROUNDED,
@@ -818,23 +819,37 @@ class ModuleWorkflowCommand(BaseCommand):
         )
         console.print()
 
+        def _notebook_path(mod_name: str) -> Path:
+            short = mod_name.split("_", 1)[1] if "_" in mod_name else mod_name
+            return self.config.project_root / "data" / "modules" / mod_name / f"{short}.ipynb"
+
         passed = 0
         failed = 0
-        skipped = 0
+        stop_module_num = None
+        stop_module_name = None
+        unreached_with_notebook: list[tuple[str, str]] = []
+        not_started_remaining = 0
 
-        for module_num in module_nums:
+        for i, module_num in enumerate(module_nums):
             module_name = module_mapping[module_num]
-
-            # Check if notebook exists
-            short_name = module_name.split("_", 1)[1] if "_" in module_name else module_name
-            notebook_path = (
-                self.config.project_root / "data" / "modules" / module_name / f"{short_name}.ipynb"
-            )
+            notebook_path = _notebook_path(module_name)
 
             if not notebook_path.exists():
-                console.print(f"  [dim]⏭️  Module {module_num}: {module_name} (no notebook)[/dim]")
-                skipped += 1
-                continue
+                console.print(
+                    f"  [dim yellow]⏭️  Module {module_num}: {module_name}"
+                    " (not started - no notebook)[/dim yellow]"
+                )
+                stop_module_num = module_num
+                stop_module_name = module_name
+
+                # Classify every later module
+                for later_num in module_nums[i + 1 :]:
+                    later_name = module_mapping[later_num]
+                    if _notebook_path(later_name).exists():
+                        unreached_with_notebook.append((later_num, later_name))
+                    else:
+                        not_started_remaining += 1
+                break
 
             console.print(f"  [cyan]▶[/cyan] Module {module_num}: {module_name}...", end=" ")
 
@@ -854,27 +869,74 @@ class ModuleWorkflowCommand(BaseCommand):
 
         console.print()
 
-        if failed == 0:
+        # --- Summary and exit codes ---
+
+        if passed == 0 and failed == 0:
+            # Stopped at the very first module -- nothing completed
+            body_lines = [
+                "[bold yellow]No modules to complete[/bold yellow]\n",
+                f"Stopped at module {stop_module_num}: {stop_module_name} (not started)",
+            ]
+            if unreached_with_notebook:
+                names = ", ".join(f"{n}: {nm}" for n, nm in unreached_with_notebook)
+                body_lines.append(f"Not reached because of the gap: {names}")
+            body_lines.append(f"\n[dim]Hint: [cyan]tren module start {stop_module_num}[/cyan][/dim]")
             console.print(
                 Panel(
-                    f"[bold green]✅ All modules completed![/bold green]\n\n"
-                    f"Passed: {passed}  Skipped: {skipped}",
+                    "\n".join(body_lines),
+                    title="⚠️ Nothing Completed",
+                    border_style="yellow",
+                    box=box.ROUNDED,
+                )
+            )
+            return 1
+
+        if failed > 0:
+            skipped = total - passed - failed
+            console.print(
+                Panel(
+                    f"[bold red]❌ Module completion failed[/bold red]\n\n"
+                    f"Passed: {passed}  Failed: {failed}  Skipped: {skipped}",
+                    title="⚠️ Failure",
+                    border_style="red",
+                    box=box.ROUNDED,
+                )
+            )
+            return 1
+
+        if passed == total:
+            console.print(
+                Panel(
+                    f"[bold green]✅ All modules completed![/bold green]\n\nPassed: {passed}",
                     title="🎉 Success",
                     border_style="green",
                     box=box.ROUNDED,
                 )
             )
             return 0
+
+        # Partial completion -- stopped at an unstarted module
+        body_lines = [
+            f"[bold green]Completed {passed} of {total} {pluralize('module', total)}[/bold green]\n",
+            f"Stopped at module {stop_module_num}: {stop_module_name} (not started - no notebook)",
+        ]
+        if unreached_with_notebook:
+            names = ", ".join(f"{n}: {nm}" for n, nm in unreached_with_notebook)
+            body_lines.append(f"Not reached because of the gap: {names}")
+        if not_started_remaining > 0:
+            body_lines.append(
+                f"Not started: {not_started_remaining} {pluralize('module', not_started_remaining)}"
+            )
+        body_lines.append(f"\n[dim]Hint: [cyan]tren module start {stop_module_num}[/cyan][/dim]")
         console.print(
             Panel(
-                f"[bold red]❌ Module completion failed[/bold red]\n\n"
-                f"Passed: {passed}  Failed: {failed}  Skipped: {skipped}",
-                title="⚠️ Failure",
-                border_style="red",
+                "\n".join(body_lines),
+                title="📦 Progress Saved",
+                border_style="green",
                 box=box.ROUNDED,
             )
         )
-        return 1
+        return 0
 
     def _complete_module_quiet(
         self, module_num: str, module_name: str, skip_tests: bool, skip_export: bool
