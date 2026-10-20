@@ -26,6 +26,7 @@ from platforms.cli.core.modules import (
     get_module_mapping,
     normalize_module_number,
 )
+from platforms.cli.core.state_schema import validate_milestones, validate_progress
 from platforms.cli.core.text import pluralize
 from platforms.cli.processes.milestone import check_and_run_milestone_unlocks
 
@@ -1075,7 +1076,13 @@ class ModuleWorkflowCommand(BaseCommand):
             "last_updated": None,
             "completion_dates": [],
         }
-        return read_json_or_warn(progress_file, default, console=self.console, label="Your saved progress")
+        return read_json_or_warn(
+            progress_file,
+            default,
+            console=self.console,
+            label="Your saved progress",
+            validate=validate_progress,
+        )
 
     def save_progress_data(self, progress: dict) -> None:
         """Save progress data to user_data/progress.json."""
@@ -1445,7 +1452,11 @@ class ModuleWorkflowCommand(BaseCommand):
         # Check which milestones have been run successfully.
         milestones_file = self.config.project_root / "user_data" / "milestones.json"
         milestones_data = read_json_or_warn(
-            milestones_file, {}, console=self.console, label="Your saved milestone progress"
+            milestones_file,
+            {},
+            console=self.console,
+            label="Your saved milestone progress",
+            validate=validate_milestones,
         )
         completed_milestones = milestones_data.get("completed_milestones", [])
 
