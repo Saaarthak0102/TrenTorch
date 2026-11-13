@@ -11,13 +11,22 @@ import { initializePyodide } from './initialize-pyodide';
 import { buildTestRunnerScript } from './build-test-runner-script';
 import { toBase64 } from './to-base64';
 
+const KNOWN_ACTIONS = new Set([
+	'init',
+	'run',
+	'preview',
+	'custom',
+	'external_prepare',
+	'external_judge',
+	'test'
+]);
+
 self.onmessage = async (e: MessageEvent) => {
-	// Origin verification — only trust messages from the same origin as this worker.
-	// `'null'` covers blob: and data: URLs that some bundlers use in development.
-	const trustedOrigins = new Set([self.location.origin, 'null']);
-	const messageOrigin = typeof e.origin === 'string' ? e.origin : '';
-	if (messageOrigin && !trustedOrigins.has(messageOrigin)) {
-		self.postMessage({ type: 'error', error: `Untrusted message origin: ${messageOrigin}` });
+	// No origin check: a dedicated worker only receives messages from the page
+	// that created it, and MessageEvent.origin is always '' here, so an origin
+	// guard could never reject anything. Validate the message shape instead.
+	if (!e.data || !KNOWN_ACTIONS.has(e.data.action)) {
+		self.postMessage({ id: e.data?.id, type: 'error', error: 'Unknown action' });
 		return;
 	}
 

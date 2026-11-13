@@ -88,12 +88,26 @@ def _get_version() -> str:
 
 __version__ = _get_version()
 
-# Configure logging
+_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Configure logging (stderr only; a file handler is added under --verbose)
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("tren-cli.log"), logging.StreamHandler(sys.stderr)],
+    format=_LOG_FORMAT,
+    handlers=[logging.StreamHandler(sys.stderr)],
 )
+
+
+def _add_file_log_handler(log_dir) -> None:
+    """Attach tren-cli.log under log_dir (not the cwd) to the root logger."""
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        handler = logging.FileHandler(log_dir / "tren-cli.log")
+    except OSError:
+        return
+    handler.setFormatter(logging.Formatter(_LOG_FORMAT))
+    logging.getLogger().addHandler(handler)
+
 
 logger = logging.getLogger(__name__)
 
@@ -417,6 +431,7 @@ The best way to learn:
             if hasattr(parsed_args, "verbose") and parsed_args.verbose:
                 self.config.verbose = True
                 logging.getLogger().setLevel(logging.DEBUG)
+                _add_file_log_handler(self._user_data_dir)
 
             if hasattr(parsed_args, "no_color") and parsed_args.no_color:
                 self.config.no_color = True
